@@ -17,6 +17,7 @@ from sklearn.svm import SVC, SVR
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import f1_score
 
 def get_embedding(img, predictor):
     predictor.set_image(img)
@@ -77,9 +78,10 @@ def test_visualize(args, model, predictor):
     dice1 = []
     dice2 = []
     dice3 = []
+    f1_score3 = []
 
-    for fname in tqdm(fnames[:num_visualize]):
-        print("Evaluating image: ", fname)
+    for fname in tqdm(fnames):
+        # print("Evaluating image: ", fname)
         # read data
         image = cv2.imread(os.path.join(data_path, 'images', 'test', fname))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -144,14 +146,18 @@ def test_visualize(args, model, predictor):
             box=bbox[None, :],
             multimask_output=False,)
         
+        print(f"mask shape {mask.shape}, mask_pred_sam shape {masks_pred_sam_prompted3[0].shape}")
         dice_l = iou_coef(mask, mask_pred_l)
         dice_p = iou_coef(mask, masks_pred_sam_prompted1[0])
         dice_b = iou_coef(mask, masks_pred_sam_prompted2[0])
         dice_i = iou_coef(mask, masks_pred_sam_prompted3[0])
+        f1_scorei = f1_score(mask, masks_pred_sam_prompted3[0])
+
         dice_linear.append(dice_l)
         dice1.append(dice_p)
         dice2.append(dice_b)
         dice3.append(dice_i)
+        f1_score3.append(f1_scorei)
 
         # plot the results
         fig, ax = plt.subplots(1, 5, figsize=(15, 10))
@@ -172,21 +178,28 @@ def test_visualize(args, model, predictor):
         ax[4].imshow(masks_pred_sam_prompted3[0])
         [axi.set_axis_off() for axi in ax.ravel()]
         
-        
-        if os.path.exists(args.save_path) == False:
-            os.mkdir(args.save_path)
-        plt.savefig(os.path.join(args.save_path, fname))
+        vis_path = os.path.join(args.save_path, 'vis')
+        mask_path = os.path.join(args.save_path, 'mask')
+
+        if os.path.exists(vis_path) == False:
+            os.mkdir(vis_path)
+        if os.path.exists(mask_path) == False:
+            os.mkdir(mask_path)
+        plt.savefig(os.path.join(vis_path, fname))
+        cv2.imwrite(os.path.join(mask_path, fname.replace("jpg", "png")), masks_pred_sam_prompted3[0])
     
     mdice0 = round(sum(dice_linear)/float(len(dice_linear)), 5)
     mdice1 = round(sum(dice1)/float(len(dice1)), 5)
     mdice2 = round(sum(dice2)/float(len(dice2)), 5)
     mdice3 = round(sum(dice3)/float(len(dice3)), 5)
+    mf1_score3 = round(sum(f1_score3)/float(len(f1_score3)), 5)
     
     print('For the first {} images: '.format(num_visualize))
     print('mIou(linear classifier: )', mdice0)
     print('mIou(point prompts): ', mdice1)
     print('mIou(bbox prompts): ', mdice2)
     print('mIou(points and boxes): ', mdice3)
+    print('F1(points and boxes): ',  mf1_score3)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -194,7 +207,7 @@ def main():
     parser.add_argument('--device', type=str, default='cuda:0', help='device')
     parser.add_argument('--data_path', type=str, default='../data', help='path to train data')
     parser.add_argument('--model_type', type=str, default='vit_b', help='SAM model type')
-    parser.add_argument('--checkpoint', type=str, default='./checkpoints/sam_vit_b_01ec64.pth', help='SAM checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='../checkpoints/sam_vit_b_01ec64.pth', help='SAM checkpoint')
     parser.add_argument('--visualize', type=bool, default=True, help='visualize the results')
     parser.add_argument('--save_path', type=str, default='../results', help='path to save the results')
     parser.add_argument('--visualize_num', type=int, default=30, help='number of pics to visualize')
@@ -212,11 +225,12 @@ def main():
     models_choice = {
         'Logistic Regression': LogisticRegression(max_iter=1000),
         'Ridge Classifier': RidgeClassifier(),
-        'SVC': SVC(),
-        'Random Forest': RandomForestClassifier(),
-        'Gradient Boosting': GradientBoostingClassifier(),
-        'Decision Tree': DecisionTreeClassifier(),
-        'KNN': KNeighborsClassifier()}
+        # 'SVC': SVC(),
+        # 'Random Forest': RandomForestClassifier(),
+        # 'Gradient Boosting': GradientBoostingClassifier(),
+        # 'Decision Tree': DecisionTreeClassifier(),
+        # 'KNN': KNeighborsClassifier()
+    }
 
     for name, model_choie in models_choice.items():
         model = train(args, predictor, model_choie, name)
