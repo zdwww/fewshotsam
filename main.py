@@ -79,6 +79,8 @@ def test_visualize(args, model, predictor):
     dice2 = []
     dice3 = []
     f1_score3 = []
+    iou_scores = []
+    f1_scores = []
 
     for fname in tqdm(fnames):
         # print("Evaluating image: ", fname)
@@ -151,13 +153,23 @@ def test_visualize(args, model, predictor):
         dice_p = iou_coef(mask, masks_pred_sam_prompted1[0])
         dice_b = iou_coef(mask, masks_pred_sam_prompted2[0])
         dice_i = iou_coef(mask, masks_pred_sam_prompted3[0])
-        f1_scorei = f1_score(mask, masks_pred_sam_prompted3[0])
+
+        TP = np.logical_and(mask, masks_pred_sam_prompted3[0]).sum()
+        FP = np.logical_and(np.logical_not(mask), masks_pred_sam_prompted3[0]).sum()
+        FN = np.logical_and(mask, np.logical_not(masks_pred_sam_prompted3[0])).sum()
+
+        # Compute IoU
+        iou = TP / (TP + FP + FN) if (TP + FP + FN) > 0 else 0
+        iou_scores.append(iou)
+
+        # Compute F1-score
+        f1 = (2 * TP) / (2 * TP + FP + FN) if (2 * TP + FP + FN) > 0 else 0
+        f1_scores.append(f1)
 
         dice_linear.append(dice_l)
         dice1.append(dice_p)
         dice2.append(dice_b)
         dice3.append(dice_i)
-        f1_score3.append(f1_scorei)
 
         # plot the results
         fig, ax = plt.subplots(1, 5, figsize=(15, 10))
@@ -192,14 +204,16 @@ def test_visualize(args, model, predictor):
     mdice1 = round(sum(dice1)/float(len(dice1)), 5)
     mdice2 = round(sum(dice2)/float(len(dice2)), 5)
     mdice3 = round(sum(dice3)/float(len(dice3)), 5)
-    mf1_score3 = round(sum(f1_score3)/float(len(f1_score3)), 5)
+    mf1_score = round(sum(f1_scores)/float(len(f1_scores)), 5)
+    miou_score = round(sum(iou_scores)/float(len(iou_scores)), 5)
     
     print('For the first {} images: '.format(num_visualize))
     print('mIou(linear classifier: )', mdice0)
     print('mIou(point prompts): ', mdice1)
     print('mIou(bbox prompts): ', mdice2)
     print('mIou(points and boxes): ', mdice3)
-    print('F1(points and boxes): ',  mf1_score3)
+    print('F1(points and boxes): ',  mf1_score)
+    print('IoU(points and boxes): ', miou_score)
 
 def main():
     parser = argparse.ArgumentParser()
